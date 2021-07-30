@@ -1,5 +1,5 @@
 //
-// Created by Fanzhe on 5/28/2017.
+// Based on modbuspp created by Fanzhe on 5/28/2017.
 //
 
 #ifndef MODBUSPP_MODBUS_H
@@ -10,6 +10,10 @@
 #include <charconv>
 #include <string>
 #include <Winsock2.h>
+#include <Ws2tcpip.h>
+
+// Link with ws2_32.lib
+#pragma comment(lib, "Ws2_32.lib")
 
 #define MAX_MSG_LENGTH 260
 
@@ -52,7 +56,7 @@ class modbus {
 private:
     bool connected;
     uint16_t PORT;
-    int socket_int;
+    int _socket;
     uint _msg_id;
     int _slaveid;
     std::string HOST;
@@ -151,32 +155,32 @@ bool modbus::modbus_connect() {
         std::cout << "Found Proper Host "<< HOST << " and Port " <<PORT <<std::endl;
     }
     WSADATA wsa;
-	SOCKET s;
 
     if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
 	{
 		printf("Failed. Error Code : %d",WSAGetLastError());
 		return 1;
 	}
-    socket_int = socket(AF_INET, SOCK_STREAM, 0);
-    if(socket_int == -1) {
+    _socket = socket(AF_INET, SOCK_STREAM, 0);
+    if(_socket == -1) {
         std::cout <<"Error Opening Socket" <<std::endl;
         return false;
     } else {
         std::cout <<"Socket Opened Successfully" << std::endl;
     }
 
-    /*int timeout_int = 20000;  // after 20 seconds connect() will timeout
-    const char* timeout = std::to_string(timeout_int).c_str();
-    setsockopt(_socket, SOL_SOCKET, SO_SNDTIMEO, (char *)timeout, sizeof(timeout));
-    setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)timeout, sizeof(timeout));
-    */
+    DWORD timeout = 1000;  // after 1 second connect() will timeout
+    setsockopt(_socket, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout, sizeof(timeout));
+    setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout));
+    
 
     _server.sin_family = AF_INET;
-    _server.sin_addr.s_addr = inet_addr(HOST.c_str());
+    std::wstring stemp = std::wstring(HOST.begin(), HOST.end());
+    PCWSTR sw = stemp.c_str();
+    InetPton(AF_INET, sw, &_server.sin_addr.s_addr);
     _server.sin_port = htons(PORT);
 
-    if (connect(socket_int, (struct sockaddr*)&_server, sizeof(_server)) < 0) {
+    if (connect(_socket, (struct sockaddr*)&_server, sizeof(_server)) < 0) {
         std::cout<< "Connection Error" << std::endl;
         return false;
     }
@@ -191,7 +195,7 @@ bool modbus::modbus_connect() {
  * Close the Modbus/TCP Connection
  */
 void modbus::modbus_close() const {
-    closesocket(socket_int);
+    closesocket(_socket);
     std::cout <<"Socket Closed" <<std::endl;
 }
 
@@ -545,7 +549,7 @@ int modbus::modbus_write_registers(int address, int amount, const uint16_t *valu
  */
 ssize_t modbus::modbus_send(uint8_t *to_send, int length) {
     _msg_id++;
-    return send(socket_int, (char *) to_send, (size_t)length, 0);
+    return send(_socket, (char *) to_send, (size_t)length, 0);
 }
 
 
@@ -555,7 +559,7 @@ ssize_t modbus::modbus_send(uint8_t *to_send, int length) {
  * @return       Size of Incoming Data
  */
 ssize_t modbus::modbus_receive(uint8_t *buffer) const {
-    return recv(socket_int, (char *) buffer, 1024, 0);
+    return recv(_socket, (char *) buffer, 1024, 0);
 }
 
 void modbus::set_bad_con() {

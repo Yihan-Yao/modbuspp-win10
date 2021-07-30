@@ -1,29 +1,60 @@
 //
-// Created by Fanzhe on 5/29/2017.
+// Based on modbuspp created by Fanzhe on 5/29/2017.
 //
 
 #include "modbus.h"
+#include <thread>
 
+static bool s_Terminate = false;
+static int slaveCount = 0;
 
-int main(int argc, char** argv)
-{
+void readBit(std::string ip, int port) {
+
     // create a modbus object
-    modbus mb = modbus("127.0.0.1", 502);
-
+    modbus mb = modbus(ip, port);
 
     // set slave id
-    mb.modbus_set_slave_id(1);
+    mb.modbus_set_slave_id(++slaveCount);
 
     // connect with the server
     mb.modbus_connect();
 
-    
+    using namespace std::literals::chrono_literals;
+    //bool read_bits;
+    uint16_t read_input_regs[1];
+    while (!s_Terminate) {
+        //mb.modbus_read_input_bits(0, 1, &read_bits);
+        mb.modbus_read_input_registers(0, 1, read_input_regs);
+        //std::cout << read_bits << std::endl
+        std::cout << read_input_regs[0] << std::endl;
+        std::this_thread::sleep_for(1s);
+    }
+
+    // close connection and free the memory
+    mb.modbus_close();
+    delete(&mb);
+}
+
+int main(int argc, char** argv)
+{
+    std::thread thread1(readBit, "127.0.0.1", 503);
+    std::thread thread2(readBit, "127.0.0.1", 502);
+
+    std::cin.get();
+    s_Terminate = true;
+
+    thread1.join();
+    thread2.join();
+
+    std::cin.get();
+
+/*    
     // read coil                        function 0x01
     bool read_coil;
-    mb.modbus_write_coil(0, false);
+    mb.modbus_write_coil(0, true);
     mb.modbus_read_coils(0, 1, &read_coil);
 
-/*
+
     // read input bits(discrete input)  function 0x02
     bool read_bits;
     mb.modbus_read_input_bits(0, 1, &read_bits);
@@ -55,12 +86,9 @@ int main(int argc, char** argv)
 
 
     // write multiple regs              function 0x10
-    uint16_t write_regs[4] = { 123, 123, 123 };
+    uint16_t write_regs[4] = { 12, 23, 34, 45 };
     mb.modbus_write_registers(0, 4, write_regs);
     */
 
-    // close connection and free the memory
-    mb.modbus_close();
-    delete(&mb);
     return 0;
 }
